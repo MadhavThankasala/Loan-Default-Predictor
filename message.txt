@@ -1,0 +1,112 @@
+# import packages and dataset 
+import pandas as pd 
+import numpy as np
+import matplotlib.pyplot as plt
+import seaborn as sns
+from sklearn.model_selection import train_test_split, cross_val_score
+from sklearn.metrics import accuracy_score, confusion_matrix, classification_report
+from sklearn.preprocessing import StandardScaler
+from sklearn.pipeline import Pipeline
+from sklearn.feature_selection import SelectKBest
+from sklearn.linear_model import SGDRegressor
+from sklearn.linear_model import LogisticRegression
+data = pd.read_csv('SBAnational.csv')
+
+#find null values 
+#data.isnull().sum()
+
+#drop null values
+data.dropna(subset=['Name', 'City', 'State', 'Bank', 'BankState', 'NewExist', 'RevLineCr', 'LowDoc', 'DisbursementDate', 'MIS_Status'], inplace=True)
+#data.isnull().sum()
+
+#check if each field has appropriate datatype
+#data.dtypes
+
+#make currency fields numerical (float)
+data[['DisbursementGross', 'BalanceGross', 'ChgOffPrinGr', 'GrAppv', 'SBA_Appv']] = data[['DisbursementGross', 'BalanceGross', 'ChgOffPrinGr', 'GrAppv', 'SBA_Appv']].applymap(lambda x: x.strip().replace('$', '').replace(',', ''))
+data[['DisbursementGross', 'BalanceGross', 'ChgOffPrinGr', 'GrAppv', 'SBA_Appv']] = data[['DisbursementGross', 'BalanceGross', 'ChgOffPrinGr', 'GrAppv', 'SBA_Appv']].apply(pd.to_numeric)
+#data.dtypes
+
+#approvalFY should be an integer. find out why its reporting as object
+#data['ApprovalFY'].unique()
+#clean approvalFY "1976A"
+def clean_str(x):
+    if isinstance(x, str):
+        return x.replace('A', '')
+    return x
+data['ApprovalFY'] = data['ApprovalFY'].apply(clean_str).astype('int64')
+#data['ApprovalFY'].unique()
+
+#change the type of other columns to appropriate types
+data = data.astype({'Zip': 'str', 'NewExist': 'int64', 'UrbanRural': 'str'})
+#data.dtypes
+
+#first two digits of NAICS code
+data['Industry'] = data['NAICS'].astype('str').apply(lambda x: x[:2])
+data['Industry'] = data['Industry'].map({
+    '11': 'Ag/For/Fish/Hunt',
+    '21': 'Min/Quar/Oil_Gas_ext',
+    '22': 'Utilities',
+    '23': 'Construction',
+    '31': 'Manufacturing',
+    '32': 'Manufacturing',
+    '33': 'Manufacturing',
+    '42': 'Wholesale_trade',
+    '44': 'Retail_trade',
+    '45': 'Retail_trade',
+    '48': 'Trans/Ware',
+    '49': 'Trans/Ware',
+    '51': 'Information',
+    '52': 'Finance/Insurance',
+    '53': 'RE/Rental/Lease',
+    '54': 'Prof/Science/Tech',
+    '55': 'Mgmt_comp',
+    '56': 'Admin_sup/Waste_Mgmt_Rem',
+    '61': 'Educational',
+    '62': 'Healthcare/Social_assist',
+    '71': 'Arts/Entertain/Rec',
+    '72': 'Accom/Food_serv',
+    '81': 'Other_no_pub',
+    '92': 'Public_Admin'
+})
+data.dropna(subset=['Industry'], inplace=True)
+#data.head()
+
+#franchise feature engineering
+data.loc[(data['FranchiseCode'] <= 1), 'IsFranchise'] = 0
+data.loc[(data['FranchiseCode'] > 1), 'IsFranchise'] = 1
+
+#further feature engineering for other fields that are considered flags
+#data['NewExist'].unique()
+data = data[(data['NewExist'] == 1) | (data['NewExist'] == 2)]
+#create NewBusiness field where 0 = existing business and 1 = new business
+data.loc[(data['NewExist'] ==1), 'NewBusiness'] = 0 
+data.loc[(data['NewExist'] ==2), 'NewBusiness'] = 1
+
+#clean RevLineCr and Low Doc
+data = data[(data['RevLineCr'] == 'Y') | (data['RevLineCr'] == 'N')]
+data = data[(data['LowDoc'] == 'Y') | (data['LowDoc'] == 'N')]
+#RevLineCr and LowDoc: No = 0, Yes = 1
+data['RevLineCr'] = np.where(data['RevLineCr'] == 'N', 0, 1)
+data['LowDoc'] = np.where(data['LowDoc'] == 'N', 0, 1)
+#print(data['RevLineCr'].unique())
+#print(data['LowDoc'].unique())
+
+#Mis_status feature engineering. P I F = 0, CHGOFF = 1
+data['LoanDefault'] = np.where(data['MIS_Status'] == 'P I F', 0, 1)
+#data['LoanDefault'].value_counts()
+
+#fix date fields (ApprovalDate, Disbursement Date)
+data[['ApprovalDate', 'DisbursementDate']] = data[['ApprovalDate', 'DisbursementDate']].apply(pd.to_datetime)
+
+#remove fields that won't be used for modeling
+data.drop(columns=['LoanNr_ChkDgt', 'Name', 'City', 'Zip', 'Bank', 'NAICS', 'NewExist', 'FranchiseCode', 'MIS_Status'], inplace = True)
+
+
+
+
+
+
+
+
+
